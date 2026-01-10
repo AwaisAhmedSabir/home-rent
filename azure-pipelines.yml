@@ -2,54 +2,26 @@ trigger:
 - main
 
 pool:
-  vmImage: ubuntu-latest
-
-variables:
-  nodeVersion: '20.x'
-  appName: 'HomeRent-api'
+  vmImage: 'ubuntu-latest'
 
 steps:
-# 1️⃣ Use Node.js
 - task: NodeTool@0
   inputs:
-    versionSpec: '$(nodeVersion)'
+    versionSpec: '20.x'
   displayName: 'Install Node.js'
 
-# 2️⃣ Install dependencies
 - script: |
     cd Backend
     npm install
-  displayName: 'Install dependencies'
+  displayName: 'Install backend dependencies'
 
-# 3️⃣ (Optional but recommended) Run tests
 - script: |
     cd Backend
-    npm test || echo "No tests found"
-  displayName: 'Run tests'
+    zip -r backend.zip .
+  displayName: 'Zip backend'
 
-# 4️⃣ Archive backend
-- task: ArchiveFiles@2
-  inputs:
-    rootFolderOrFile: 'Backend'
-    includeRootFolder: false
-    archiveType: zip
-    archiveFile: '$(Build.ArtifactStagingDirectory)/backend.zip'
-    replaceExistingArchive: true
-  displayName: 'Archive backend'
-
-# 5️⃣ Publish artifact
 - task: PublishBuildArtifacts@1
   inputs:
-    PathtoPublish: '$(Build.ArtifactStagingDirectory)/backend.zip'
-    ArtifactName: drop
+    PathtoPublish: 'Backend/backend.zip'
+    ArtifactName: 'drop'
   displayName: 'Publish artifact'
-
-# 6️⃣ Deploy to Azure Web App
-- task: AzureWebApp@1
-  inputs:
-    azureSubscription: 'Azure for Students (f8e65a6a-5efc-4b6e-a259-5ade9efa0430)'
-    appType: 'webAppLinux'
-    appName: '$(appName)'
-    package: '$(Build.ArtifactStagingDirectory)/backend.zip'
-  displayName: 'Deploy to Azure Web App'
-
