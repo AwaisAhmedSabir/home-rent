@@ -42,6 +42,7 @@ export default function Home() {
   const [editingPost, setEditingPost] = useState(null);
   const [editingComment, setEditingComment] = useState(null);
   const [commentMenuAnchor, setCommentMenuAnchor] = useState(null);
+  const [userMenuAnchor, setUserMenuAnchor] = useState(null);
   const [selectedComment, setSelectedComment] = useState(null);
   const [newPost, setNewPost] = useState({ 
     imageFile: null, 
@@ -101,12 +102,27 @@ export default function Home() {
         // Transform backend data to match frontend structure
         const transformedPosts = response.data.map((post) => {
           // Construct image URL from UUID or use existing imageUrl
+          // If imageUrl is a full Azure Blob Storage URL (starts with https://), use it directly
+          // Otherwise, try to construct from UUID or existing path
           let imageUrl = post.imageUrl;
-          if (post.imageUuid && !imageUrl) {
-            imageUrl = `${BACKEND_URL}/uploads/${post.imageUuid}`;
-          } else if (post.imageUuid && !imageUrl.startsWith("http")) {
-            imageUrl = `${BACKEND_URL}${post.imageUrl}`;
+          if (!imageUrl || imageUrl === "") {
+            // If no URL but we have UUID, we can't construct Azure Blob Storage URL from just UUID
+            // The backend should have stored the full URL. For now, try to get from backend.
+            if (post.imageUuid) {
+              // This is a fallback - ideally backend should return full URL
+              imageUrl = `${BACKEND_URL}/uploads/${post.imageUuid}`;
+            }
+          } else if (!imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
+            // If URL exists but is not a full URL, prepend backend URL
+            if (imageUrl.startsWith("/uploads/")) {
+              imageUrl = `${BACKEND_URL}${imageUrl}`;
+            } else if (imageUrl.startsWith("/")) {
+              imageUrl = `${BACKEND_URL}${imageUrl}`;
+            } else {
+              imageUrl = `${BACKEND_URL}/${imageUrl}`;
+            }
           }
+          // If imageUrl starts with http:// or https://, use it as-is (Azure Blob Storage URL)
           
           // Transform likes array to just IDs for easier comparison
           const likesArray = (post.likes || []).map((like) => {
@@ -176,9 +192,11 @@ export default function Home() {
       // Extract user IDs from tagged people
       const taggedPeopleIds = newPost.taggedPeople.map(person => person.id || person._id || person);
       
-      // Then create the post with the media UUID and metadata
+      // Then create the post with the media UUID, URL, and metadata
+      // Pass both UUID and URL - URL is the full Azure Blob Storage URL from upload
       const response = await postsAPI.create({
         imageUuid: uploadResponse.data.uuid,
+        imageUrl: uploadResponse.data.url, // Pass the full URL from upload response
         title: newPost.title.trim(),
         caption: newPost.caption.trim(),
         location: newPost.location.trim(),
@@ -210,12 +228,14 @@ export default function Home() {
       let imageUuid = editPost.existingImageUuid;
       
       // If new image is selected, upload it first
+      let newImageUrl = null;
       if (editPost.imageFile) {
         const uploadResponse = await uploadAPI.uploadImage(editPost.imageFile);
         if (!uploadResponse.success) {
           throw new Error("Failed to upload image");
         }
         imageUuid = uploadResponse.data.uuid;
+        newImageUrl = uploadResponse.data.url; // Get the full URL from upload response
         
         // Delete old image if it exists
         if (editPost.existingImageUuid) {
@@ -238,6 +258,7 @@ export default function Home() {
 
       const response = await postsAPI.update(editingPost.id, {
         ...(imageUuid && { imageUuid }),
+        ...(newImageUrl && { imageUrl: newImageUrl }), // Pass the full URL if new image uploaded
         ...(mediaType && { mediaType }),
         title: editPost.title.trim(),
         caption: editPost.caption.trim(),
@@ -301,13 +322,23 @@ export default function Home() {
           return like.toString();
         });
         
-        // Construct image URL
+        // Construct image URL - use full URL if available, otherwise construct from backend
         let imageUrl = updatedPost.imageUrl;
-        if (updatedPost.imageUuid && !imageUrl) {
-          imageUrl = `${BACKEND_URL}/uploads/${updatedPost.imageUuid}`;
-        } else if (updatedPost.imageUuid && !imageUrl.startsWith("http")) {
-          imageUrl = `${BACKEND_URL}${updatedPost.imageUrl}`;
+        if (!imageUrl || imageUrl === "") {
+          if (updatedPost.imageUuid) {
+            imageUrl = `${BACKEND_URL}/uploads/${updatedPost.imageUuid}`;
+          }
+        } else if (!imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
+          // If URL exists but is not full URL, prepend backend URL
+          if (imageUrl.startsWith("/uploads/")) {
+            imageUrl = `${BACKEND_URL}${imageUrl}`;
+          } else if (imageUrl.startsWith("/")) {
+            imageUrl = `${BACKEND_URL}${imageUrl}`;
+          } else {
+            imageUrl = `${BACKEND_URL}/${imageUrl}`;
+          }
         }
+        // If imageUrl starts with http:// or https://, use it as-is (Azure Blob Storage URL)
         
         const transformedPost = {
           id: updatedPost._id,
@@ -634,17 +665,77 @@ export default function Home() {
             {user ? (
               <>
                 <span className="badge">{user.role}</span>
-                <span className="muted">{user.name || user.email}</span>
-                <button onClick={logout} className="btnGhost">
-                  Logout
+                <button
+                  onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+                  className="userNameBtn"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    color: "#262626",
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    borderRadius: "8px",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#f5f5f5";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "none";
+                  }}
+                >
+                  {user.name || user.email}
+                  <span style={{ fontSize: "12px", color: "#8e8e8e", marginTop: "2px" }}>▼</span>
                 </button>
+                <Menu
+                  anchorEl={userMenuAnchor}
+                  open={Boolean(userMenuAnchor)}
+                  onClose={() => setUserMenuAnchor(null)}
+                  anchorOrigin={{
+                    vertical: "bottom",
+                    horizontal: "right",
+                  }}
+                  transformOrigin={{
+                    vertical: "top",
+                    horizontal: "right",
+                  }}
+                  PaperProps={{
+                    style: {
+                      marginTop: "8px",
+                      minWidth: "150px",
+                      borderRadius: "8px",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                    },
+                  }}
+                >
+                  <MenuItem
+                    onClick={() => {
+                      setUserMenuAnchor(null);
+                      logout();
+                    }}
+                    sx={{
+                      fontSize: "14px",
+                      padding: "10px 16px",
+                      "&:hover": {
+                        background: "#f5f5f5",
+                      },
+                    }}
+                  >
+                    Logout
+                  </MenuItem>
+                </Menu>
               </>
             ) : (
               <>
-                <Link className="btnGhost" to="/login">
-                  Login
+                <Link className="btnGhost" to="/login" style={{ textDecoration: "none" }}>
+                  Sign in
                 </Link>
-                <Link className="btn" to="/register">
+                <Link className="btn" to="/register" style={{ textDecoration: "none" }}>
                   Register
                 </Link>
               </>
@@ -725,21 +816,85 @@ export default function Home() {
                   className="createPostBtn"
                   disabled={processing}
                 >
-                  Create Post
+                  Add Property
                 </Button>
               )}
               <span className="badge">{user.role}</span>
-              <span className="muted">{user.name || user.email}</span>
-              <button onClick={logout} className="btnGhost" disabled={processing}>
-                Logout
-              </button>
+              <div style={{ position: "relative" }}>
+                <button
+                  onClick={(e) => setUserMenuAnchor(e.currentTarget)}
+                  className="userNameBtn"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    color: "#262626",
+                    fontWeight: 600,
+                    fontSize: "14px",
+                    borderRadius: "8px",
+                    transition: "background 0.2s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "#f5f5f5";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "none";
+                  }}
+                  disabled={processing}
+                >
+                  {user.name || user.email}
+                  <span style={{ fontSize: "12px", color: "#8e8e8e", marginTop: "2px" }}>▼</span>
+                </button>
+                <Menu
+                  anchorEl={userMenuAnchor}
+                  open={Boolean(userMenuAnchor)}
+                  onClose={() => setUserMenuAnchor(null)}
+                  anchorOrigin={{
+                    vertical: "bottom",
+                    horizontal: "right",
+                  }}
+                  transformOrigin={{
+                    vertical: "top",
+                    horizontal: "right",
+                  }}
+                  PaperProps={{
+                    style: {
+                      marginTop: "8px",
+                      minWidth: "150px",
+                      borderRadius: "8px",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                    },
+                  }}
+                >
+                  <MenuItem
+                    onClick={() => {
+                      setUserMenuAnchor(null);
+                      logout();
+                    }}
+                    disabled={processing}
+                    sx={{
+                      fontSize: "14px",
+                      padding: "10px 16px",
+                      "&:hover": {
+                        background: "#f5f5f5",
+                      },
+                    }}
+                  >
+                    Logout
+                  </MenuItem>
+                </Menu>
+              </div>
             </>
           ) : (
             <>
-              <Link className="btnGhost" to="/login">
-                Login
+              <Link className="btnGhost" to="/login" style={{ textDecoration: "none" }}>
+                Sign in
               </Link>
-              <Link className="btn" to="/register">
+              <Link className="btn" to="/register" style={{ textDecoration: "none" }}>
                 Register
               </Link>
             </>
@@ -852,17 +1007,15 @@ export default function Home() {
                   {/* Post Media (Image or Video) */}
                   {(() => {
                     // Construct the media URL properly
+                    // Use imageUrl directly if it's a full URL (Azure Blob Storage), otherwise construct from backend
                     let mediaUrl = post.imageUrl;
-                    if (!mediaUrl && post.imageUuid) {
-                      // If no URL, we need to find the file with extension
-                      // For now, try common extensions
-                      const extensions = post.mediaType === "video" 
-                        ? [".mp4", ".webm", ".mov", ".avi"] 
-                        : [".jpg", ".jpeg", ".png", ".gif", ".webp"];
-                      // We'll use the backend URL which should handle this
-                      mediaUrl = `${BACKEND_URL}/uploads/${post.imageUuid}`;
-                    } else if (mediaUrl && !mediaUrl.startsWith("http")) {
-                      // Ensure proper URL construction
+                    if (!mediaUrl || mediaUrl === "") {
+                      // Fallback: construct from UUID (won't work for Azure Blob Storage, but helps with old posts)
+                      if (post.imageUuid) {
+                        mediaUrl = `${BACKEND_URL}/uploads/${post.imageUuid}`;
+                      }
+                    } else if (!mediaUrl.startsWith("http://") && !mediaUrl.startsWith("https://")) {
+                      // If URL is not a full URL (doesn't start with http/https), prepend backend URL
                       if (mediaUrl.startsWith("/uploads/")) {
                         mediaUrl = `${BACKEND_URL}${mediaUrl}`;
                       } else if (mediaUrl.startsWith("/")) {
@@ -871,6 +1024,7 @@ export default function Home() {
                         mediaUrl = `${BACKEND_URL}/${mediaUrl}`;
                       }
                     }
+                    // If mediaUrl starts with http:// or https://, use it as-is (Azure Blob Storage URL)
                     
                     if (post.mediaType === "video") {
                       return (
@@ -1068,7 +1222,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* Create Post Modal */}
+      {/* Add Property Modal */}
       <Dialog
         open={openCreateModal}
         onClose={() => !processing && setOpenCreateModal(false)}
@@ -1076,7 +1230,7 @@ export default function Home() {
         fullWidth
       >
         <DialogTitle>
-          Create New Post
+          Add Property
           <IconButton
             onClick={() => setOpenCreateModal(false)}
             className="closeBtn"
@@ -1224,7 +1378,7 @@ export default function Home() {
             Cancel
           </Button>
           <Button onClick={handleCreatePost} variant="contained" disabled={processing || !newPost.imageFile}>
-            {processing ? <CircularProgress size={20} /> : "Post"}
+            {processing ? <CircularProgress size={20} /> : "Add Property"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1237,7 +1391,7 @@ export default function Home() {
         fullWidth
       >
         <DialogTitle>
-          Edit Post
+          Edit Property
           <IconButton
             onClick={() => setOpenEditModal(false)}
             className="closeBtn"

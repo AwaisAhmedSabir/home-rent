@@ -11,6 +11,10 @@ FrontEnd/node_modules/
 # Build output
 dist/
 build/
+FrontEnd/dist/
+
+# Uploads (local test files)
+Backend/uploads/
 
 # Logs
 *.log

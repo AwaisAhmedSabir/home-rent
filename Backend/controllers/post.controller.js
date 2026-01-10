@@ -164,7 +164,7 @@ export const searchPosts = async (req, res) => {
 // @access  Private (Creator only)
 export const createPost = async (req, res) => {
   try {
-    const { imageUuid, title, caption, location, taggedPeople, mediaType } = req.body;
+    const { imageUuid, imageUrl: providedImageUrl, title, caption, location, taggedPeople, mediaType } = req.body;
 
     // Validation - at least imageUuid is required
     if (!imageUuid) {
@@ -174,13 +174,17 @@ export const createPost = async (req, res) => {
       });
     }
 
-    // Get file URL from UUID
-    const imageUrl = storageService.getFileUrl(imageUuid);
-    if (!imageUrl) {
-      return res.status(400).json({
-        success: false,
-        message: "File not found",
-      });
+    // Use provided imageUrl (from upload response) or look it up from UUID
+    let imageUrl = providedImageUrl;
+    if (!imageUrl || imageUrl === "") {
+      // Fallback: look up URL from UUID (for backward compatibility)
+      imageUrl = await storageService.getFileUrl(imageUuid);
+      if (!imageUrl) {
+        return res.status(400).json({
+          success: false,
+          message: "File not found. Please ensure the file was uploaded successfully.",
+        });
+      }
     }
 
     // Validate taggedPeople is an array
@@ -246,12 +250,17 @@ export const updatePost = async (req, res) => {
 
     // Update post
     if (imageUuid) {
-      const imageUrl = storageService.getFileUrl(imageUuid);
-      if (!imageUrl) {
-        return res.status(400).json({
-          success: false,
-          message: "File not found",
-        });
+      // Use provided imageUrl (from upload response) or look it up from UUID
+      let imageUrl = req.body.imageUrl;
+      if (!imageUrl || imageUrl === "") {
+        // Fallback: look up URL from UUID (for backward compatibility)
+        imageUrl = await storageService.getFileUrl(imageUuid);
+        if (!imageUrl) {
+          return res.status(400).json({
+            success: false,
+            message: "File not found. Please ensure the file was uploaded successfully.",
+          });
+        }
       }
       // Delete old file if changing
       if (post.imageUuid && post.imageUuid !== imageUuid) {

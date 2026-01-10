@@ -1,13 +1,10 @@
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
+import { BlobServiceClient, ContainerClient } from "@azure/storage-blob";
 import { v4 as uuidv4 } from "uuid";
+import dotenv from "dotenv";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+dotenv.config();
 
 // Storage configuration
-const UPLOAD_DIR = path.join(__dirname, "../uploads");
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB (increased for videos)
 const ALLOWED_MIME_TYPES = [
   // Images
@@ -25,21 +22,46 @@ const ALLOWED_MIME_TYPES = [
   "video/x-ms-wmv"
 ];
 
-// Ensure upload directory exists
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+// Azure Blob Storage configuration
+const AZURE_STORAGE_CONNECTION_STRING = process.env.AZURE_STORAGE_CONNECTION_STRING;
+const AZURE_STORAGE_CONTAINER_NAME = process.env.AZURE_STORAGE_CONTAINER_NAME || "homerent1218";
+const AZURE_STORAGE_ACCOUNT_NAME = process.env.AZURE_STORAGE_ACCOUNT_NAME || "homerentstorage";
+
+// Initialize Azure Blob Service Client
+let blobServiceClient;
+let containerClient;
+
+try {
+  if (AZURE_STORAGE_CONNECTION_STRING) {
+    blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
+    containerClient = blobServiceClient.getContainerClient(AZURE_STORAGE_CONTAINER_NAME);
+    
+    // Ensure container exists (create if it doesn't)
+    containerClient.createIfNotExists({
+      access: "blob", // Allow public read access to blobs
+    }).then(() => {
+      console.log(`✅ Azure Blob Storage container "${AZURE_STORAGE_CONTAINER_NAME}" is ready`);
+    }).catch((error) => {
+      console.error("⚠️  Error creating container (it might already exist):", error.message);
+    });
+  } else {
+    console.warn("⚠️  AZURE_STORAGE_CONNECTION_STRING not set. Using local file system fallback.");
+  }
+} catch (error) {
+  console.error("⚠️  Error initializing Azure Blob Storage:", error.message);
+  console.warn("⚠️  Falling back to local file system. Set AZURE_STORAGE_CONNECTION_STRING to use Azure Blob Storage.");
 }
 
 /**
- * Storage Service - Abstracted for easy migration to Azure Blob Storage
- * Currently uses local file system, but can be swapped for Azure Blob Storage
+ * Storage Service - Now uses Azure Blob Storage
+ * Falls back to local file system if Azure Blob Storage is not configured
  */
 class StorageService {
   /**
-   * Save file to storage
+   * Save file to storage (Azure Blob Storage or local fallback)
    * @param {Buffer} fileBuffer - File buffer
    * @param {string} mimeType - File MIME type
-   * @returns {Promise<{uuid: string, path: string, url: string}>}
+   * @returns {Promise<{uuid: string, path: string, url: string, filename: string}>}
    */
   async saveFile(fileBuffer, mimeType) {
     // Generate UUID for filename
@@ -48,37 +70,99 @@ class StorageService {
     // Determine file extension from MIME type
     const extension = this.getExtensionFromMimeType(mimeType);
     const filename = `${uuid}${extension}`;
-    const filePath = path.join(UPLOAD_DIR, filename);
 
-    // Save file to local storage
-    fs.writeFileSync(filePath, fileBuffer);
+    // Use Azure Blob Storage if configured
+    if (containerClient) {
+      try {
+        const blockBlobClient = containerClient.getBlockBlobClient(filename);
+        
+        // Upload file to Azure Blob Storage
+        await blockBlobClient.upload(fileBuffer, fileBuffer.length, {
+          blobHTTPHeaders: {
+            blobContentType: mimeType,
+          },
+        });
 
-    // Return file info
-    return {
-      uuid,
-      path: filePath,
-      url: `/uploads/${filename}`, // URL path for accessing the file
-      filename,
-    };
+        // Generate public URL
+        const url = `https://${AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${AZURE_STORAGE_CONTAINER_NAME}/${filename}`;
+
+        return {
+          uuid,
+          path: filename, // Store blob name instead of file path
+          url: url,
+          filename,
+        };
+      } catch (error) {
+        console.error("Error uploading to Azure Blob Storage:", error);
+        throw new Error("Failed to upload file to Azure Blob Storage");
+      }
+    } else {
+      // Fallback to local file system (for development)
+      const fs = await import("fs");
+      const path = await import("path");
+      const { fileURLToPath } = await import("url");
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = path.dirname(__filename);
+      const UPLOAD_DIR = path.join(__dirname, "../uploads");
+
+      if (!fs.existsSync(UPLOAD_DIR)) {
+        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      }
+
+      const filePath = path.join(UPLOAD_DIR, filename);
+      fs.writeFileSync(filePath, fileBuffer);
+
+      return {
+        uuid,
+        path: filePath,
+        url: `/uploads/${filename}`,
+        filename,
+      };
+    }
   }
 
   /**
-   * Delete file from storage
+   * Delete file from storage (Azure Blob Storage or local fallback)
    * @param {string} uuid - File UUID
    * @returns {Promise<boolean>}
    */
   async deleteFile(uuid) {
     try {
-      // Find file by UUID (scan directory for file starting with UUID)
-      const files = fs.readdirSync(UPLOAD_DIR);
-      const file = files.find((f) => f.startsWith(uuid));
+      if (containerClient) {
+        // Use Azure Blob Storage
+        try {
+          // List blobs to find file starting with UUID
+          const blobs = containerClient.listBlobsFlat({ prefix: uuid });
+          
+          for await (const blob of blobs) {
+            const blockBlobClient = containerClient.getBlockBlobClient(blob.name);
+            await blockBlobClient.delete();
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error("Error deleting from Azure Blob Storage:", error);
+          return false;
+        }
+      } else {
+        // Fallback to local file system
+        const fs = await import("fs");
+        const path = await import("path");
+        const { fileURLToPath } = await import("url");
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        const UPLOAD_DIR = path.join(__dirname, "../uploads");
 
-      if (file) {
-        const filePath = path.join(UPLOAD_DIR, file);
-        fs.unlinkSync(filePath);
-        return true;
+        const files = fs.readdirSync(UPLOAD_DIR);
+        const file = files.find((f) => f.startsWith(uuid));
+
+        if (file) {
+          const filePath = path.join(UPLOAD_DIR, file);
+          fs.unlinkSync(filePath);
+          return true;
+        }
+        return false;
       }
-      return false;
     } catch (error) {
       console.error("Error deleting file:", error);
       return false;
@@ -86,39 +170,42 @@ class StorageService {
   }
 
   /**
-   * Get file path by UUID
+   * Get file URL by UUID (Azure Blob Storage or local fallback)
    * @param {string} uuid - File UUID
-   * @returns {string|null}
+   * @returns {Promise<string|null>}
    */
-  getFilePath(uuid) {
+  async getFileUrl(uuid) {
     try {
-      const files = fs.readdirSync(UPLOAD_DIR);
-      const file = files.find((f) => f.startsWith(uuid));
+      if (containerClient) {
+        // Use Azure Blob Storage
+        try {
+          const blobs = containerClient.listBlobsFlat({ prefix: uuid });
+          
+          for await (const blob of blobs) {
+            return `https://${AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${AZURE_STORAGE_CONTAINER_NAME}/${blob.name}`;
+          }
+          return null;
+        } catch (error) {
+          console.error("Error getting file URL from Azure Blob Storage:", error);
+          return null;
+        }
+      } else {
+        // Fallback to local file system
+        const fs = await import("fs");
+        const path = await import("path");
+        const { fileURLToPath } = await import("url");
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        const UPLOAD_DIR = path.join(__dirname, "../uploads");
 
-      if (file) {
-        return path.join(UPLOAD_DIR, file);
+        const files = fs.readdirSync(UPLOAD_DIR);
+        const file = files.find((f) => f.startsWith(uuid));
+
+        if (file) {
+          return `/uploads/${file}`;
+        }
+        return null;
       }
-      return null;
-    } catch (error) {
-      console.error("Error getting file path:", error);
-      return null;
-    }
-  }
-
-  /**
-   * Get file URL by UUID
-   * @param {string} uuid - File UUID
-   * @returns {string}
-   */
-  getFileUrl(uuid) {
-    try {
-      const files = fs.readdirSync(UPLOAD_DIR);
-      const file = files.find((f) => f.startsWith(uuid));
-
-      if (file) {
-        return `/uploads/${file}`;
-      }
-      return null;
     } catch (error) {
       console.error("Error getting file URL:", error);
       return null;
@@ -196,4 +283,4 @@ class StorageService {
 export default new StorageService();
 
 // Export constants for use in other files
-export { UPLOAD_DIR, MAX_FILE_SIZE, ALLOWED_MIME_TYPES };
+export { MAX_FILE_SIZE, ALLOWED_MIME_TYPES };

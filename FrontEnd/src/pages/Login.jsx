@@ -107,14 +107,6 @@ export default function Login() {
             {loading ? "Signing in..." : "Sign in"}
           </Button>
 
-          <Button
-            type="button"
-            className="linkBtn"
-            onClick={() => {}}
-          >
-            Forgot your password?
-          </Button>
-
           <Divider className="divider">
             <span className="dividerText">or</span>
           </Divider>
