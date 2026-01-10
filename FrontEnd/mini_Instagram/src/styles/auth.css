@@ -1,0 +1,204 @@
+/* ===== Easy customization (change only these) ===== */
+:root {
+  --bg: #f4f6fb;
+  --card-bg: #ffffff;
+  --card-border: #e7e7ea;
+  --text: #111827;
+  --muted: #6b7280;
+
+  --brand: #2563eb;             /* brand text color */
+  --brand-mark-1: #22c55e;      /* small mark gradient */
+  --brand-mark-2: #3b82f6;
+
+  --card-width: 520px;
+  --card-radius: 14px;
+
+  --primary-btn-bg: #0b1220;    /* button base */
+  --primary-btn-bg-2: #1f2937;  /* gradient end */
+  --primary-btn-text: #ffffff;
+
+  --input-border: #d9dbe1;
+  --input-radius: 10px;
+
+  --outline-border: #e5e7eb;
+}
+
+/* ===== Layout ===== */
+.signinPage {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  padding: 24px;
+}
+
+.signinCard {
+  width: min(var(--card-width), 94vw);
+  background: var(--card-bg) !important;
+  border: 1px solid var(--card-border);
+  border-radius: var(--card-radius);
+  padding: 28px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+/* ===== Brand ===== */
+.brandRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.brandMark {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--brand-mark-1), var(--brand-mark-2));
+  display: inline-block;
+}
+
+.brandName {
+  font-weight: 700 !important;
+  color: var(--brand) !important;
+  font-size: 18px !important;
+}
+
+/* ===== Title ===== */
+.signinTitle {
+  font-size: 44px !important;
+  font-weight: 800 !important;
+  color: var(--text) !important;
+  margin: 6px 0 18px 0 !important;
+  letter-spacing: -0.8px;
+}
+
+/* ===== Form ===== */
+.signinForm {
+  display: grid;
+  gap: 12px;
+}
+
+.errorText {
+  color: #b00020 !important;
+  font-size: 14px !important;
+  margin-bottom: 8px !important;
+  padding: 8px 12px !important;
+  background: #ffebee !important;
+  border-radius: 8px !important;
+  border-left: 3px solid #b00020 !important;
+}
+
+.fieldLabel {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+  margin-top: 4px !important;
+}
+
+.textField .MuiOutlinedInput-root {
+  border-radius: var(--input-radius);
+  background: #fff;
+}
+
+.textField .MuiOutlinedInput-notchedOutline {
+  border-color: var(--input-border) !important;
+}
+
+.textField .MuiOutlinedInput-root:hover .MuiOutlinedInput-notchedOutline {
+  border-color: #bfc3cc !important;
+}
+
+.textField .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline {
+  border-color: #4f46e5 !important;
+  border-width: 2px !important;
+}
+
+/* ===== Remember ===== */
+.rememberRow {
+  margin-top: 4px;
+}
+.rememberRow .MuiFormControlLabel-label {
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ===== Primary button ===== */
+.primaryBtn {
+  margin-top: 8px !important;
+  padding: 12px 14px !important;
+  border-radius: 12px !important;
+  text-transform: none !important;
+  font-weight: 700 !important;
+  background: linear-gradient(180deg, var(--primary-btn-bg), var(--primary-btn-bg-2)) !important;
+  color: var(--primary-btn-text) !important;
+}
+
+.primaryBtn:hover {
+  filter: brightness(1.05);
+}
+
+/* ===== Links ===== */
+.linkBtn {
+  text-transform: none !important;
+  font-weight: 600 !important;
+  color: var(--text) !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 6px 0 !important;
+}
+
+.linkBtn:hover {
+  background: transparent !important;
+  text-decoration: underline;
+}
+
+/* ===== Divider ===== */
+.divider {
+  margin: 10px 0 6px 0 !important;
+}
+
+.dividerText {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 0 10px;
+}
+
+/* ===== Social buttons ===== */
+.socialButtons {
+  display: grid;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.socialBtn {
+  text-transform: none !important;
+  font-weight: 700 !important;
+  border-radius: 12px !important;
+  padding: 10px 12px !important;
+  border-color: var(--outline-border) !important;
+  color: var(--text) !important;
+}
+
+.socialBtn:hover {
+  border-color: #cfd3dd !important;
+  background: #fafafa !important;
+}
+
+/* ===== Footer ===== */
+.footerText {
+  margin-top: 12px !important;
+  color: var(--muted) !important;
+  font-size: 14px !important;
+  text-align: center;
+}
+
+.footerLink {
+  color: var(--text) !important;
+  font-weight: 700 !important;
+  text-decoration: underline !important;
+  cursor: pointer;
+}
+
+.footerLink:hover {
+  opacity: 0.8;
+}

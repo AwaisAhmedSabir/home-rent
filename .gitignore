@@ -1,0 +1,20 @@
+# Environment variables
+.env
+Backend/.env
+FrontEnd/.env
+
+# Dependencies
+node_modules/
+Backend/node_modules/
+FrontEnd/node_modules/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
