@@ -50,7 +50,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads"), {
 app.get("/api/health", (req, res) => {
   res.json({ 
     status: "OK", 
-    message: "Mini Instagram API is running",
+    message: "HomeRent API is running",
     timestamp: new Date().toISOString()
   });
 });

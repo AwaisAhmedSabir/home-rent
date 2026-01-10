@@ -1,7 +1,7 @@
 {
-  "name": "mini-instagram-backend",
+  "name": "home-rent-backend",
   "version": "1.0.0",
-  "description": "Backend API for Mini Instagram application",
+  "description": "Backend API for HomeRent application",
   "main": "server.js",
   "type": "module",
   "scripts": {
