@@ -19,6 +19,12 @@ Backend/uploads/
 # Logs
 *.log
 
+# Deployment packages
+*.zip
+deploy-*.zip
+**/deploy-temp/
+**/deploy-*/
+
 # OS files
 .DS_Store
 Thumbs.db

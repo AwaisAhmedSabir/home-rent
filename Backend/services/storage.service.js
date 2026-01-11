@@ -31,10 +31,16 @@ const AZURE_STORAGE_ACCOUNT_NAME = process.env.AZURE_STORAGE_ACCOUNT_NAME || "ho
 let blobServiceClient;
 let containerClient;
 
+console.log("🔍 Initializing Azure Storage...");
+console.log(`   Container Name: ${AZURE_STORAGE_CONTAINER_NAME}`);
+console.log(`   Account Name: ${AZURE_STORAGE_ACCOUNT_NAME}`);
+console.log(`   Connection String Set: ${!!AZURE_STORAGE_CONNECTION_STRING}`);
+
 try {
   if (AZURE_STORAGE_CONNECTION_STRING) {
     blobServiceClient = BlobServiceClient.fromConnectionString(AZURE_STORAGE_CONNECTION_STRING);
     containerClient = blobServiceClient.getContainerClient(AZURE_STORAGE_CONTAINER_NAME);
+    console.log("✅ Azure Blob Storage client initialized");
     
     // Ensure container exists (create if it doesn't)
     containerClient.createIfNotExists({
@@ -43,13 +49,16 @@ try {
       console.log(`✅ Azure Blob Storage container "${AZURE_STORAGE_CONTAINER_NAME}" is ready`);
     }).catch((error) => {
       console.error("⚠️  Error creating container (it might already exist):", error.message);
+      console.error("   Full error:", error);
     });
   } else {
     console.warn("⚠️  AZURE_STORAGE_CONNECTION_STRING not set. Using local file system fallback.");
   }
 } catch (error) {
   console.error("⚠️  Error initializing Azure Blob Storage:", error.message);
+  console.error("   Full error:", error);
   console.warn("⚠️  Falling back to local file system. Set AZURE_STORAGE_CONNECTION_STRING to use Azure Blob Storage.");
+  containerClient = null; // Ensure it's null on error
 }
 
 /**
@@ -74,6 +83,7 @@ class StorageService {
     // Use Azure Blob Storage if configured
     if (containerClient) {
       try {
+        console.log(`📤 Uploading file to Azure Storage: ${filename}`);
         const blockBlobClient = containerClient.getBlockBlobClient(filename);
         
         // Upload file to Azure Blob Storage
@@ -85,6 +95,7 @@ class StorageService {
 
         // Generate public URL
         const url = `https://${AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net/${AZURE_STORAGE_CONTAINER_NAME}/${filename}`;
+        console.log(`✅ File uploaded to Azure Storage: ${url}`);
 
         return {
           uuid,
@@ -93,10 +104,12 @@ class StorageService {
           filename,
         };
       } catch (error) {
-        console.error("Error uploading to Azure Blob Storage:", error);
+        console.error("❌ Error uploading to Azure Blob Storage:", error);
+        console.error("   Error details:", error.message);
         throw new Error("Failed to upload file to Azure Blob Storage");
       }
     } else {
+      console.warn(`⚠️  containerClient is not available. Using local file system fallback for: ${filename}`);
       // Fallback to local file system (for development)
       const fs = await import("fs");
       const path = await import("path");
